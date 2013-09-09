@@ -42,7 +42,7 @@ def install_agent
     recursive true
   end
 
-  daemon = "#{new_resource.target_dir}/#{new_resource.plugin_name}/newrelic_#{new_resource.plugin_name.split('_').first}_agent.daemon"
+  executable = "#{new_resource.target_dir}/#{new_resource.plugin_name}/newrelic_#{new_resource.plugin_name.split('_').first}_agent"
 
   remote_file "#{Chef::Config[:file_cache_path]}/#{::File.basename(new_resource.source)}" do
     source   new_resource.source
@@ -54,7 +54,7 @@ def install_agent
     command "tar --strip-components=1 -xvjf #{::File.basename(new_resource.source)} -C #{target}" if new_resource.source  =~ /\.bz2$/
 
     cwd     Chef::Config[:file_cache_path]
-    not_if { ::File.exists?(daemon) }
+    not_if { ::File.exists?(executable) }
   end
 
   execute "bundle_install_#{new_resource.plugin_name}" do
@@ -69,6 +69,8 @@ end
 
 
 def configure_agent
+  @run_context.include_recipe "runit"
+
   config_file = "#{new_resource.target_dir}/#{new_resource.plugin_name}/config/newrelic_plugin.yml"
 
   r = template config_file do
@@ -83,16 +85,15 @@ def configure_agent
   end
   new_resource.updated_by_last_action(true) if r.updated_by_last_action?
 
-  daemon = "#{new_resource.target_dir}/#{new_resource.plugin_name}/newrelic_#{new_resource.plugin_name.split('_').first}_agent.daemon"
+  executable = "#{new_resource.target_dir}/#{new_resource.plugin_name}/newrelic_#{new_resource.plugin_name.split('_').first}_agent"
 
-  service "newrelic_plugin_#{new_resource.plugin_name}" do
-    supports        status: true
-    start_command   "su #{new_resource.owner} -c '#{daemon} start'"
-    stop_command    "su #{new_resource.owner} -c '#{daemon} stop'"
-    status_command  "su #{new_resource.owner} -c '#{daemon} status'"
-
-    subscribes      :restart, "template[#{config_file}]"
-    action          :start
+  runit_service "newrelic_plugin_#{new_resource.plugin_name}" do
+    run_template_name 'generic-agent'
+    log_template_name 'common-agent'
+    options           executable: executable,
+                      user: new_resource.owner
+    subscribes        :restart, "template[#{config_file}]"
+    action            [:enable, :start]
   end
 end
 

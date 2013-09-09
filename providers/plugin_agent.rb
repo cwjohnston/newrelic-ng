@@ -19,6 +19,8 @@
 #
 
 action :configure do
+  @run_context.include_recipe "runit"
+
   r = template new_resource.config_file do
     cookbook  new_resource.cookbook
     source    new_resource.source
@@ -36,9 +38,12 @@ action :configure do
 
   new_resource.updated_by_last_action(true) if r.updated_by_last_action?
 
-  service 'newrelic-plugin-agent' do
-    supports   status: true, restart: true
-    subscribes :restart, "template[#{new_resource.config_file}]"
-    action   [ :enable, :start ]
+  runit_service "newrelic-plugin-agent" do
+    run_template_name 'plugin-agent'
+    log_template_name 'common-agent'
+    options           user: new_resource.owner,
+                      config_file: new_resource.config_file
+    subscribes        :restart, "template[#{new_resource.config_file}]"
+    action            [:enable, :start]
   end
 end

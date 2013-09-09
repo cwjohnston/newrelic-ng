@@ -8,6 +8,7 @@ version          '0.3.1'
 depends          'apt'
 depends          'build-essential'
 depends          'python'
+depends          'runit', '~> 1.2.0'
 
 %w{ ubuntu debian redhat centos amazon suse scientific }.each do |os|
   supports os
